@@ -1302,23 +1302,74 @@ const Game = {
         }
     },
 
-    triggerChest() {
-        GameState.phase = "event_end";
-        this.triggerAnim('event-icon', 'anim-spawn');
+triggerChest() {
+    GameState.phase = "event_end";
+    this.triggerAnim('event-icon', 'anim-spawn');
 
-        // 特別版：寶箱永遠給不死鳥的羽毛
-        const feather = { ...CONFIG.phoenixFeather };
-        this.addItemToInventory(feather);
+    const isThief = Player.class === 'thief';
+    const roll = Math.random();
+    let title = "📦 發現寶箱";
+    let icon = "📦";
+    let desc = "";
 
-        this.renderEvent(
-            "📦 發現寶箱",
-            "你打開了寶箱...",
-            "奇蹟發生了！你獲得了 <span class='rarity-legendary'>不死鳥的羽毛</span>！",
-            "🪶"
-        );
+    if (isThief) {
+        // 盜賊：不會遇到空箱或陷阱，機率重新分配
+        // 0–0.4 金幣，0.4–0.7 消耗品，0.7–1 裝備
+        if (roll < 0.4) {
+            const amount = Math.floor(Math.random() * 50) + 10 + (Player.depth * 2);
+            Player.gold += amount;
+            desc = `你靈巧地解除機關，順手搜刮了一些財寶，獲得了 <span class='gold-text'>${amount} G</span>`;
+            this.showFloatingText(`+${amount} G`, "#ffd700");
+        } else if (roll < 0.7) {
+            const item = this.generateSpecificItem(['consumable']);
+            this.addItemToInventory(item);
+            desc = `你熟練地拆解陷阱機構，從中找到了一瓶 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
+        } else {
+            const item = this.generateSpecificItem(['weapon', 'armor', 'shield']);
+            this.addItemToInventory(item);
+            desc = `你打開寶箱，獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
+        }
+    } else {
+        // 一般職業：保留原本的寶箱機率
+        // 0–0.3 金幣，0.3–0.6 消耗品，0.6–0.8 裝備，0.8–0.9 空箱，0.9–1 陷阱
+        if (roll < 0.30) {
+            const amount = Math.floor(Math.random() * 50) + 10 + (Player.depth * 2);
+            Player.gold += amount;
+            desc = `獲得了 <span class='gold-text'>${amount} G</span>`;
+            this.showFloatingText(`+${amount} G`, "#ffd700");
+        } else if (roll < 0.60) {
+            const item = this.generateSpecificItem(['consumable']);
+            this.addItemToInventory(item);
+            desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
+        } else if (roll < 0.80) {
+            const item = this.generateSpecificItem(['weapon', 'armor', 'shield']);
+            this.addItemToInventory(item);
+            desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
+        } else if (roll < 0.90) {
+            desc = "裡面空空如也...";
+        } else {
+            const dmg = Math.floor(Player.maxHp * 0.15);
+            Player.hp = Math.max(0, Player.hp - dmg);
+            desc = `是陷阱！受到了 <span class='damage-text'>${dmg}</span> 點傷害。`;
+            this.triggerAnim('game-container', 'anim-screen-shake');
+            this.showFloatingText(`-${dmg} HP`, "red");
+            if (Player.hp === 0) {
+                this.playerDie("死於寶箱陷阱");
+                return;
+            }
+        }
+    }
 
-        this.setButtons("繼續", "nextEvent", "無", null, true);
-    },
+    this.renderEvent(
+        title,
+        "你打開了寶箱...",
+        desc,
+        icon
+    );
+    this.setButtons("繼續", "nextEvent", "無", null, true);
+    this.updateUI();
+},
+
 
     getWeightedMonster() {
         let activeMonsters = [];
@@ -1886,3 +1937,4 @@ Game.init();
 </script>
 </body>
 </html>
+
