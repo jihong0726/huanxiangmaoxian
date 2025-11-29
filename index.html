@@ -882,86 +882,49 @@ const Game = {
     },
 
     nextEvent() {
-        if (Player.hp <= 0) {
-            this.restart();
-            return;
-        }
+    if (Player.hp <= 0) {
+        this.restart();
+        return;
+    }
 
-        Player.depth++;
-        this.checkAchievements();
-        this.log(`>>> 進入第 ${Player.depth} 層探索...`);
-        
-        // 天使之歌：每層回 5HP
-        if (Player.buff && Player.buff.id === 'angel_song') {
-            if (Player.hp < Player.maxHp) {
-                Player.hp = Math.min(Player.maxHp, Player.hp + 5);
-                this.showFloatingText("+5 HP", "#69f0ae");
-            }
-        }
+    Player.depth++;
+    this.checkAchievements();
+    this.log(`>>> 進入第 ${Player.depth} 層探索...`);
 
-        // 特殊深層魔王（原本1000層真身邏輯保留）
-        if (Player.depth >= 1000 && (Player.depth - 1000) % 500 === 0) {
-            this.triggerCombat(true, true); 
-            this.updateUI();
-            return;
-        }
-
-        // 原本 500 層 Boss 保留
-        if (Player.depth === 500) {
-            this.triggerCombat(true, false); 
-            this.updateUI();
-            return;
-        }
-        
-        if (Player.depth === 501) {
-            alert("警告：你已進入深層領域！所有怪物實力大幅增強！");
-        }
-        
-        // 跌倒事件 (0.5% after depth 100)
-        if (Player.depth > 100 && Math.random() < 0.005) {
-            this.triggerTrip();
-            this.updateUI();
-            return;
-        }
-
-        // 哈比事件 (1% after depth 200)
-        if (Player.depth > 200 && Math.random() < 0.01) {
-            this.triggerHarpy();
-            this.updateUI();
-            return;
-        }
-
-        // ✅ 每 20 層必定遇到一個「大 Boss」
-        if (Player.depth % 20 === 0) {
-            // 第 20, 40, 60, ... 層：大Boss戰
-            this.triggerCombat(false, false, true);  // 第三個參數標記為大Boss
-            this.updateUI();
-            return;
-        }
-
-        // ✅ 按層數循環體驗事件：
-        // 1 層型：戰鬥
-        // 2 層型：商店
-        // 3 層型：祈禱
-        // 4 層型：寶箱
-        // 5 層型：休息回血
-        // 然後再從 1 重新循環
-        const mod = Player.depth % 5;
-
-        if (mod === 1) {
-            this.triggerCombat(false, false);   // 一般戰鬥
-        } else if (mod === 2) {
-            this.triggerMerchant();             // 商店
-        } else if (mod === 3) {
-            this.triggerStatue();               // 祈禱（天使／惡魔）
-        } else if (mod === 4) {
-            this.triggerChest();                // 寶箱
-        } else { // mod === 0
-            this.triggerHeal();                 // 休息回血
-        }
-        
+    // ✔️ 每 20 層固定大Boss（不受其他規則影響）
+    if (Player.depth % 20 === 0) {
+        this.triggerCombat(false, false, true); // 第三個參數 true = 大Boss
         this.updateUI();
-    },
+        return;
+    }
+
+    // 🔄 每 5 層循環一次事件（確保所有事件都能遇到）
+    const mod = Player.depth % 5;
+
+    if (mod === 1) {
+        this.triggerCombat(false, false);      // ⚔️ 普通戰鬥
+    } 
+    else if (mod === 2) {
+        this.triggerMerchant();                // 🛒 商人事件
+    } 
+    else if (mod === 3) {
+        this.triggerStatue();                  // 🙏 祈禱神像（永遠天使）
+    } 
+    else if (mod === 4) {
+        // 🗝️ 寶箱（盜賊必定金色寶箱，其它職業也給高品質）
+        if (Player.class === "thief") {
+            this.resolveThiefChest();          // 金色寶箱（神器優先）
+        } else {
+            this.triggerChest();               // 高品質普通寶箱
+        }
+    } 
+    else { // mod === 0
+        this.triggerHeal();                    // 💖 休息回血、安全層
+    }
+
+    this.updateUI();
+},
+
 
     
     // --- Updated Trip Event (0.5% Prob, 70/30 or Hook) ---
@@ -1965,6 +1928,7 @@ Game.init();
 </script>
 </body>
 </html>
+
 
 
 
