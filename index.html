@@ -1541,6 +1541,7 @@ showCredits() {
                 this.showFloatingText("+5 G", "gold");
                 logHtml += `<span class='demon-text'>[惡魔財富]</span> 獲得 5 G<br>`;
             }
+            if (true) pCritRate = 1;   // 外挂版：100% 暴击
             if (Player.buff.id === 'demon_destruction') {
                 if (Math.random() < 0.1) {
                     enemy.hp = 0;
@@ -1996,3 +1997,4 @@ Game.init();
 </script>
 </body>
 </html>
+
