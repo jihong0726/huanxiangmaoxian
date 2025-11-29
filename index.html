@@ -319,7 +319,7 @@
             <div style="font-weight: bold; font-size: 1.2em;">⚔️ 幻想冒險</div>
             <button onclick="Game.showAchievements()" style="padding:4px 8px; font-size:0.8em;">🏆 成就</button>
             <button onclick="Game.showCompendium()" style="padding:4px 8px; font-size:0.8em; background:#673ab7;">📖 圖鑑</button>
-<button onclick="Game.showCredits()" style="padding:4px 8px; font-size:0.8em; background:#ff5722;">👨‍💻 作者</button>
+            <button onclick="Game.showCredits()" style="padding:4px 8px; font-size:0.8em; background:#ff5722;">👨‍💻 作者</button>
         </div>
         <div id="class-badge" class="class-badge"></div>
     </header>
@@ -720,7 +720,7 @@ const Game = {
         });
     },
 
-showCredits() {
+    showCredits() {
         document.getElementById('credits-modal').style.display = 'flex';
     },
 
@@ -928,7 +928,7 @@ showCredits() {
             return;
         }
 
-                // 特別版：奇數層必定戰鬥，偶數層必定職業事件
+        // 特別版：奇數層必定戰鬥，偶數層必定職業事件
         if (Player.depth % 2 === 1) {
             this.triggerCombat(false, false);
         } else {
@@ -955,8 +955,8 @@ showCredits() {
         // Check for Ape Class
         const isApe = Player.class === 'ape';
 
-        // Determine Outcome: 30% Good (or Hook or Ape), 70% Bad
-                const isGoodOutcome = true;
+        // 特別版：永遠是好結果
+        const isGoodOutcome = true;
 
         if (isGoodOutcome) {
             // Good Outcome: Catch cliff -> Get random equipment
@@ -974,7 +974,7 @@ showCredits() {
             }
             this.renderEvent("💫 意外之喜", "雖然跌倒了...", msg, "🪝");
         } else {
-            // Bad Outcome (70%): Lose equipment
+            // Bad Outcome (原本的 70% 分支，現在永遠不會走到這裡)
             let lostItemName = null;
             const equippedTypes = [];
             if (Player.equipment.weapon) equippedTypes.push('weapon');
@@ -989,7 +989,6 @@ showCredits() {
                 this.recalcStats();
                 this.renderEvent("💫 跌倒了！", "地面突然崩塌，你摔了一跤...", `你不小心弄丟了 <span class='damage-text'>${lostItemName}</span>！`, "🦶");
             } else {
-                // Nothing to lose
                 const dmg = 10;
                 Player.hp = Math.max(1, Player.hp - dmg);
                 this.updateUI();
@@ -1158,7 +1157,7 @@ showCredits() {
         this.setButtons("祈禱", "pray", "離開", "nextEvent", false);
     },
 
-        pray() {
+    pray() {
         if (!CONFIG.buffs) return;
 
         // 特別版：永遠是天使勇氣 buff
@@ -1321,44 +1320,6 @@ showCredits() {
         this.setButtons("繼續", "nextEvent", "無", null, true);
     },
 
-
-
-        const roll = Math.random();
-        let title = "📦 發現寶箱";
-        let desc = "";
-        let icon = "📦";
-
-        let isThief = Player.class === 'thief';
-        let safeRoll = isThief ? roll * 0.8 : roll; 
-
-        if (safeRoll < 0.30) {
-            const amount = Math.floor(Math.random() * 50) + 10 + (Player.depth * 2);
-            Player.gold += amount;
-            desc = `獲得了 <span class='gold-text'>${amount} G</span>`;
-            this.showFloatingText(`+${amount} G`, "#ffd700");
-        } else if (safeRoll < 0.60) {
-            const item = this.generateSpecificItem(['consumable']);
-            this.addItemToInventory(item);
-            desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
-        } else if (safeRoll < 0.80) {
-            const item = this.generateSpecificItem(['weapon', 'armor', 'shield']);
-            this.addItemToInventory(item);
-            desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
-        } else if (safeRoll < 0.90) {
-            desc = "裡面空空如也...";
-        } else {
-            const dmg = Math.floor(Player.maxHp * 0.15);
-            Player.hp = Math.max(0, Player.hp - dmg);
-            desc = `是陷阱！受到了 <span class='damage-text'>${dmg}</span> 點傷害。`;
-            this.triggerAnim('game-container', 'anim-screen-shake');
-            this.showFloatingText(`-${dmg} HP`, "red");
-            if(Player.hp === 0) { this.playerDie("死於寶箱陷阱"); return; }
-        }
-
-        this.renderEvent(title, "你打開了寶箱...", desc, icon);
-        this.setButtons("繼續", "nextEvent", "無", null, true);
-    },
-
     getWeightedMonster() {
         let activeMonsters = [];
         if (Player.depth < 50) {
@@ -1398,9 +1359,9 @@ showCredits() {
             baseMonster = this.getWeightedMonster();
             let rand = Math.random();
             if (Player.depth > 300) {
-               if (rand < 0.1) tier = "normal";        // 0% -> 10%
-    else if (rand < 0.55) tier = "elite";   // 50% -> 45%
-    else tier = "boss";                     // 50% -> 45%
+                if (rand < 0.1) tier = "normal";        // 0% -> 10%
+                else if (rand < 0.55) tier = "elite";   // 50% -> 45%
+                else tier = "boss";                     // 50% -> 45%
             } else if (Player.depth > 100) {
                 if (rand < 0.1) tier = "boss"; else if (rand < 0.6) tier = "elite"; else tier = "normal";
             } else {
@@ -1474,7 +1435,8 @@ showCredits() {
                 this.showFloatingText("+5 G", "gold");
                 logHtml += `<span class='demon-text'>[惡魔財富]</span> 獲得 5 G<br>`;
             }
-            if (true) pCritRate = 1;   // 外挂版：100% 暴击
+            // 外掛版：100% 暴擊
+            if (true) pCritRate = 1;
             if (Player.buff.id === 'demon_destruction') {
                 if (Math.random() < 0.1) {
                     enemy.hp = 0;
@@ -1491,7 +1453,7 @@ showCredits() {
 
         let pCrit = Math.random() < pCritRate;
         if (pCrit) {
-            // [修改] 騎士職業的特殊爆擊：渾身一擊 (3倍傷害)
+            // 騎士職業的特殊爆擊：渾身一擊 (3倍傷害)
             if (Player.class === 'knight') {
                 pDmg *= 3;
                 logHtml += `你對 ${enemy.name} 造成 <span class='crit-text' style='font-size:1.3em'>💥 渾身一擊 ${pDmg}</span> 點傷害。<br>`;
@@ -1508,8 +1470,6 @@ showCredits() {
         this.triggerAnim('event-icon', 'anim-damage');
         this.showFloatingText(pDmg, pCrit ? "red" : "white");
         
-        // 刪除舊的 logHtml 賦值，已改為上方條件式處理
-
         if (enemy.hp <= 0) {
             this.combatWin();
             return;
@@ -1777,7 +1737,7 @@ showCredits() {
     },
 
     handleItemClick(index, category) {
-        // [修正] 死亡狀態禁止操作背包，防止死後喝水復活
+        // 死亡狀態禁止操作背包
         if (Player.hp <= 0 || GameState.phase === 'dead') return;
 
         if (GameState.phase === "merchant") {
@@ -1800,19 +1760,17 @@ showCredits() {
 
         if (!['weapon', 'armor', 'shield'].includes(type)) return;
 
-        // [修改] 稻草人職業限制：無法裝備騎士盾和塔盾
+        // 稻草人職業限制：無法裝備騎士盾和塔盾
         if (Player.class === 'scarecrow' && (item.name === '騎士盾' || item.name === '塔盾')) {
-            alert(`稻草人太輕了，無法裝備沉重的 ${item.name}！\n請使用較輕的盾牌（如金盾牌/一般盾牌）。`);
+            alert(`稻草人太輕了，無法裝備沉重的 ${item.name}！\n請使用較輕的盾牌。`);
             return;
         }
 
-        // 1. Swap logic
         if (Player.equipment[type]) this.addItemToInventory(Player.equipment[type], false);
         
         Player.equipment[type] = item;
         Player.inventory[category].splice(index, 1);
         
-        // 2. Render and Recalculate Stats (handles MaxHP/HP ratio)
         this.recalcStats();
         this.updateUI();    
         this.log(`裝備了 ${item.name}`);
@@ -1825,7 +1783,6 @@ showCredits() {
         this.addItemToInventory(item, false); 
         Player.equipment[type] = null;
         
-        // Recalculate Stats (handles MaxHP/HP ratio)
         this.recalcStats();
         this.updateUI();
         this.log(`卸下了 ${type === 'weapon' ? '武器' : type === 'armor' ? '防具' : '盾牌'}`);
@@ -1884,7 +1841,6 @@ showCredits() {
         this.renderInvList('inv-consum', Player.inventory.consumable, 'consumable');
         this.renderInvList('inv-mat', Player.inventory.material, 'material');
 
-        // 自動存檔觸發點：只要 UI 更新且非讀取中且活著，就自動存檔
         if (!GameState.isLoading && Player.hp > 0 && Player.class) {
             this.saveGame();
         }
@@ -1930,6 +1886,3 @@ Game.init();
 </script>
 </body>
 </html>
-
-
-
