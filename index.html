@@ -1,604 +1,237 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/index.html b/index.html
-index 34d5dda1790f231588581e4003601014ad2f809e..289367ce3b54f1dd51b6f7f200352d96874f9028 100644
---- a/index.html
-+++ b/index.html
-@@ -487,57 +487,58 @@ const CONFIG = {
-         { id: "true_rest", name: "發自心靈的休息", cond: "獲得所有成就", rarity: "ultra", hidden: true, check: (p) => Game.checkAllAchievements() }
-     ]
- };
- 
- const Player = {
-     hp: 100,
-     maxHp: 100,
-     baseAtk: 5,
-     gold: 100,
-     depth: 0,
-     class: null,
-     equipment: { weapon: null, armor: null, shield: null },
-     inventory: { 
-         equipment: [], 
-         consumable: [ // 初始自帶一瓶治療藥水
-             { name: "治療藥水", type: "consumable", val: 30, rarity: "common", price: 25, icon: "🧪", desc: "恢復30點生命" }
-         ], 
-         material: [] 
-     },
-     buff: null,
-     achievements: new Set(),
-     history: { items: new Set() },
-     kill1000Boss: false
- };
- 
--const GameState = {
--    phase: "select_class",
--    currentEnemy: null,
--    merchantStock: [],
--    log: [],
--    isLoading: false
--};
-+const GameState = {
-+    phase: "select_class",
-+    currentEnemy: null,
-+    merchantStock: [],
-+    log: [],
-+    isLoading: false,
-+    goldenChestCount: 0
-+};
- 
- const Game = {
-     init() {
-         // 自動檢查存檔
-         if (localStorage.getItem('fantasy_adventure_save')) {
-             this.loadGame();
-         } else {
-             this.updateUI();
-             // 預設顯示職業選擇
-         }
-     },
- 
-     // --- Save & Load System (Encrypted) ---
-     saveGame() {
-         if (Player.hp <= 0) {
-             // 死亡時清除存檔
-             localStorage.removeItem('fantasy_adventure_save');
-             return;
-         }
-         if (!Player.class) return; // 還沒選職業不存檔
- 
-         try {
-             // 準備存檔資料
-             const saveData = {
-                 player: {
-@@ -859,93 +860,97 @@ const Game = {
-      * 重新計算 MaxHP 並根據比例調整 CurrentHP
-      */
-     recalcStats() {
-         // 1. 儲存當前血量比例
-         const currentRatio = Player.maxHp > 0 ? Player.hp / Player.maxHp : 1; 
- 
-         // 2. 計算新的 MaxHP
-         let bonusHp = Player.equipment.armor ? Player.equipment.armor.val : 0;
-         const newMaxHp = 100 + bonusHp; 
-         
-         // 3. 應用新的 MaxHP
-         Player.maxHp = newMaxHp;
- 
-         // 4. 根據舊比例計算新的 CurrentHP
-         let newHp = Math.round(currentRatio * Player.maxHp);
-         
-         // 5. 確保 CurrentHP 不超過 MaxHP
-         Player.hp = Math.min(newHp, Player.maxHp);
-         
-         // 6. 確保 CurrentHP 不為負
-         if (Player.hp < 0) Player.hp = 0;
-         
-         this.updateStatsUI();
-     },
- 
--    nextEvent() {
--    if (Player.hp <= 0) {
--        this.restart();
--        return;
--    }
--
--    Player.depth++;
--    this.checkAchievements();
--    this.log(`>>> 進入第 ${Player.depth} 層探索...`);
--
--    // ✔️ 每 20 層固定大Boss（不受其他規則影響）
--    if (Player.depth % 20 === 0) {
--        this.triggerCombat(false, false, true); // 第三個參數 true = 大Boss
--        this.updateUI();
--        return;
--    }
--
--    // 🔄 每 5 層循環一次事件（確保所有事件都能遇到）
--    const mod = Player.depth % 5;
--
--    if (mod === 1) {
--        this.triggerCombat(false, false);      // ⚔️ 普通戰鬥
--    } 
--    else if (mod === 2) {
--        this.triggerMerchant();                // 🛒 商人事件
--    } 
--    else if (mod === 3) {
--        this.triggerStatue();                  // 🙏 祈禱神像（永遠天使）
--    } 
--    else if (mod === 4) {
--        // 🗝️ 寶箱（盜賊必定金色寶箱，其它職業也給高品質）
--        if (Player.class === "thief") {
--            this.resolveThiefChest();          // 金色寶箱（神器優先）
--        } else {
--            this.triggerChest();               // 高品質普通寶箱
--        }
--    } 
--    else { // mod === 0
--        this.triggerHeal();                    // 💖 休息回血、安全層
--    }
--
--    this.updateUI();
--},
-+    getEventTypeForDepth(depth) {
-+        if (depth % 20 === 0) return "boss";
-+
-+        const mod = depth % 5;
-+        if (mod === 1) return "combat";
-+        if (mod === 2) return "merchant";
-+        if (mod === 3) return (Player.hp <= Player.maxHp * 0.8) ? "rest" : "combat";
-+        if (mod === 4) return "golden_chest";
-+        return "elite"; // mod === 0
-+    },
-+
-+    nextEvent() {
-+        if (Player.hp <= 0) {
-+            this.restart();
-+            return;
-+        }
-+
-+        Player.depth++;
-+        this.checkAchievements();
-+        this.log(`>>> 進入第 ${Player.depth} 層探索...`);
-+
-+        const eventType = this.getEventTypeForDepth(Player.depth);
-+
-+        switch (eventType) {
-+            case "boss":
-+                this.triggerCombat(false, false, true);
-+                break;
-+            case "combat":
-+                this.triggerCombat(false, false, false, "normal");
-+                break;
-+            case "merchant":
-+                this.triggerMerchant();
-+                break;
-+            case "rest":
-+                this.triggerHeal();
-+                break;
-+            case "golden_chest":
-+                this.triggerChest(true);
-+                break;
-+            case "elite":
-+            default:
-+                this.triggerCombat(false, false, false, "elite");
-+                break;
-+        }
-+
-+        this.updateUI();
-+    },
- 
- 
-     
-     // --- Updated Trip Event (0.5% Prob, 70/30 or Hook) ---
-     triggerTrip() {
-         GameState.phase = "event_end";
-         this.triggerAnim('event-icon', 'anim-damage');
-         
-         // Check for Hook (Guarantees Good Outcome)
-         const hookIndex = Player.inventory.material.findIndex(i => i.name === '鉤子');
-         let useHook = false;
-         if (hookIndex !== -1) {
-             Player.inventory.material.splice(hookIndex, 1); // Consume hook
-             useHook = true;
-         }
- 
-         // Check for Ape Class
-         const isApe = Player.class === 'ape';
- 
-         // 特別版：永遠是好結果
-         const isGoodOutcome = true;
- 
-         if (isGoodOutcome) {
-             // Good Outcome: Catch cliff -> Get random equipment
-             // Generate item
-@@ -1285,165 +1290,167 @@ const Game = {
-         const item = Player.inventory[category][index];
-         if (!item) return;
-         if (item.type === 'revive' || item.name === '彈弓' || item.name === '鉤子') {
-             alert("這件物品無法出售！");
-             return;
-         }
- 
-         let price = item.price;
-         if (['weapon', 'armor', 'shield', 'consumable'].includes(item.type)) {
-             price = Math.floor(price * 0.8);
-         }
-         
-         if (Player.class === 'merchant') {
-             price = Math.floor(price * 1.2);
-         }
-         
-         if(confirm(`確定要以 ${price} G 出售 ${item.name} 嗎？`)) {
-             Player.inventory[category].splice(index, 1);
-             Player.gold += price;
-             this.showFloatingText("+ " + price + " G", "yellow");
-             this.log(`出售 ${item.name} 獲得 ${price} G`);
-             this.updateUI();
-         }
-     },
- 
--    triggerChest() {
--        GameState.phase = "event_end";
--        this.triggerAnim('event-icon', 'anim-spawn');
--
--        const isThief = Player.class === 'thief';
--        const roll = Math.random();
--        let title = "📦 發現寶箱";
--        let icon = "📦";
--        let desc = "";
--
--        if (isThief) {
--            // 盜賊特權：寶箱永遠只有好結果（無空箱、無陷阱）
--            if (roll < 0.4) {
--                const amount = Math.floor(Math.random() * 50) + 10 + (Player.depth * 2);
--                Player.gold += amount;
--                desc = `獲得了 <span class='gold-text'>${amount} G</span>`;
--                this.showFloatingText(`+${amount} G`, "#ffd700");
--            } else if (roll < 0.7) {
--                const item = this.generateSpecificItem(['consumable']);
--                this.addItemToInventory(item);
--                desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
--            } else {
--                const item = this.generateSpecificItem(['weapon', 'armor', 'shield']);
--                this.addItemToInventory(item);
--                desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
--            }
--        } else {
--            // 一般職業 → 保留原本機率（含空箱與陷阱）
--            if (roll < 0.30) {
--                const amount = Math.floor(Math.random() * 50) + 10 + (Player.depth * 2);
--                Player.gold += amount;
--                desc = `獲得了 <span class='gold-text'>${amount} G</span>`;
--                this.showFloatingText(`+${amount} G`, "#ffd700");
--            } else if (roll < 0.60) {
--                const item = this.generateSpecificItem(['consumable']);
--                this.addItemToInventory(item);
--                desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
--            } else if (roll < 0.80) {
--                const item = this.generateSpecificItem(['weapon', 'armor', 'shield']);
--                this.addItemToInventory(item);
--                desc = `獲得了 <span class='${CONFIG.rarityDisplay[item.rarity].color}'>${item.name}</span>`;
--            } else if (roll < 0.90) {
--                desc = "裡面空空如也...";
--            } else {
--                const dmg = Math.floor(Player.maxHp * 0.15);
--                Player.hp = Math.max(0, Player.hp - dmg);
--                desc = `是陷阱！受到了 <span class='damage-text'>${dmg}</span> 點傷害。`;
--                this.triggerAnim('game-container', 'anim-screen-shake');
--                this.showFloatingText(`-${dmg} HP`, "red");
--                if (Player.hp === 0) {
--                    this.playerDie("死於寶箱陷阱");
--                    return;
--                }
--            }
--        }
--
--        this.renderEvent(title, "你打開了寶箱...", desc, icon);
--        this.setButtons("繼續", "nextEvent", "無", null, true);
--    },
-+    triggerChest(forceGolden = false) {
-+        GameState.phase = "event_end";
-+        this.triggerAnim('event-icon', 'anim-spawn');
-+
-+        const desc = forceGolden ? this.resolveGoldenChestReward() : this.resolveGoldenChestReward();
-+        const title = forceGolden ? "🗝️ 金色寶箱" : "📦 發現寶箱";
-+        const icon = forceGolden ? "🗝️" : "📦";
-+
-+        this.renderEvent(title, "你打開了寶箱...", desc, icon);
-+        this.setButtons("繼續", "nextEvent", "無", null, true);
-+    },
-+
-+    resolveGoldenChestReward() {
-+        GameState.goldenChestCount += 1;
-+
-+        const legendaryPool = CONFIG.itemPool.filter(i => i.rarity === 'legendary');
-+        const epicPool = CONFIG.itemPool.filter(i => i.rarity === 'epic');
-+
-+        const hasLegendary = (type) => {
-+            const equipped = Player.equipment[type];
-+            const inventoryHas = Player.inventory.equipment.some(i => i.type === type && i.rarity === 'legendary');
-+            const historyHas = Array.from(Player.history.items).some(name => {
-+                const item = CONFIG.itemPool.find(p => p.name === name);
-+                return item && item.type === type && item.rarity === 'legendary';
-+            });
-+            return (equipped && equipped.rarity === 'legendary') || inventoryHas || historyHas;
-+        };
-+
-+        const pickFromPool = (pool) => {
-+            if (pool.length === 0) return this.generateRandomItem('boss');
-+            const template = pool[Math.floor(Math.random() * pool.length)];
-+            return { ...template };
-+        };
-+
-+        let reward;
-+
-+        if (GameState.goldenChestCount === 1) {
-+            reward = pickFromPool(legendaryPool);
-+        } else if (!hasLegendary('weapon')) {
-+            reward = pickFromPool(legendaryPool.filter(i => i.type === 'weapon'));
-+        } else if (!hasLegendary('armor')) {
-+            reward = pickFromPool(legendaryPool.filter(i => i.type === 'armor'));
-+        } else if (!hasLegendary('shield')) {
-+            reward = pickFromPool(legendaryPool.filter(i => i.type === 'shield'));
-+        } else {
-+            reward = pickFromPool([...legendaryPool, ...epicPool].filter(i => ['weapon', 'armor', 'shield'].includes(i.type)));
-+        }
-+
-+        this.addItemToInventory(reward);
-+        const colorClass = reward.rarity ? CONFIG.rarityDisplay[reward.rarity].color : '';
-+        this.showFloatingText(reward.name, '#ffd700');
-+
-+        return `獲得了 <span class='${colorClass}'>${reward.name}</span>！`;
-+    },
-+
-+    claimBossChest() {
-+        Player.hp = Player.maxHp;
-+        this.triggerChest(true);
-+    },
- 
- 
- 
-     getWeightedMonster() {
-         let activeMonsters = [];
-         if (Player.depth < 50) {
-             let weakWeight = 99 / 4; 
-             let strongWeight = 1 / 6; 
-             CONFIG.monsters.forEach((m, idx) => {
-                 let tempM = {...m};
-                 tempM.weight = (idx < 4) ? weakWeight : strongWeight;
-                 activeMonsters.push(tempM);
-             });
-         } else {
-             activeMonsters = CONFIG.monsters;
-         }
- 
-         let totalWeight = 0;
-         for (let m of activeMonsters) totalWeight += m.weight;
-         let randomVal = Math.random() * totalWeight;
-         for (let m of activeMonsters) {
-             if (randomVal < m.weight) return m;
-             randomVal -= m.weight;
-         }
-         return activeMonsters[0];
-     },
- 
--    triggerCombat(isForcedBoss, checkTrueForm, isBigBoss) {
--        GameState.phase = "combat";
-+    triggerCombat(isForcedBoss, checkTrueForm, isBigBoss, forcedTier = null) {
-+        GameState.phase = "combat";
-         
-         let baseMonster;
-         let tier = "normal";
-         let canFlee = true;
- 
--        if (isForcedBoss) {
--            // 強制魔王（原本 500 / 1000 層邏輯）
--            baseMonster = CONFIG.monsters[9]; 
--            tier = "boss";
--            canFlee = false;   // 這種戰鬥禁止逃跑（按你之前的設計保留）
--        } else {
-+        if (isForcedBoss) {
-+            // 強制魔王（原本 500 / 1000 層邏輯）
-+            baseMonster = CONFIG.monsters[9];
-+            tier = "boss";
-+            canFlee = false;   // 這種戰鬥禁止逃跑（按你之前的設計保留）
-+        } else {
-             baseMonster = this.getWeightedMonster();
-             let rand = Math.random();
--            if (Player.depth > 300) {
--                if (rand < 0.10) tier = "normal";
--                else if (rand < 0.55) tier = "elite";
--                else tier = "boss";
--            } else if (Player.depth > 100) {
--                if (rand < 0.10) tier = "boss";
--                else if (rand < 0.60) tier = "elite";
--                else tier = "normal";
--            } else {
--                if (rand < 0.01) tier = "boss";
--                else if (rand < 0.11) tier = "elite";
--                else tier = "normal";
--            }
--        }
-+            if (Player.depth > 300) {
-+                if (rand < 0.10) tier = "normal";
-+                else if (rand < 0.55) tier = "elite";
-+                else tier = "boss";
-+            } else if (Player.depth > 100) {
-+                if (rand < 0.10) tier = "boss";
-+                else if (rand < 0.60) tier = "elite";
-+                else tier = "normal";
-+            } else {
-+                if (rand < 0.01) tier = "boss";
-+                else if (rand < 0.11) tier = "elite";
-+                else tier = "normal";
-+            }
-+        }
-+
-+        if (forcedTier) tier = forcedTier;
- 
-         let hpMul = 1, atkMul = 1;
-         let namePrefix = "";
-         
-         if (Player.depth > 500) {
-             hpMul *= 1.5;
-             namePrefix += "深淵 ";
-         }
- 
-         if (tier === "elite") { 
-             hpMul *= 2; 
-             atkMul *= 1.5; 
-             namePrefix += "菁英 "; 
-         } else if (tier === "boss") { 
-             hpMul *= 3; 
-             atkMul *= 2; 
-             namePrefix += "首領 "; 
-         }
- 
-         // ✅ 每 20 層大 Boss 強化 & 標記
-         if (isBigBoss) {
-             tier = "boss";
-             hpMul *= 1.5;                 // 大Boss稍微再坦一點（你要我也可以幫你調）
-             atkMul *= 1.2;
-             namePrefix = `第 ${Player.depth} 層守門者 `;
-@@ -1582,53 +1589,54 @@ const Game = {
-             if (s.val <= 0) {
-                 logHtml += `<span class='damage-text'>💔 你的 ${s.name} 碎裂了！</span><br>`;
-                 Player.equipment.shield = null;
-                 this.recalcStats(); 
-             }
-         }
- 
-         if (applyDamage) {
-             Player.hp -= mDmg;
-             this.triggerAnim('game-container', 'anim-screen-shake');
-             this.showFloatingText(`-${mDmg}`, "red");
-             logHtml += `${enemy.name} 攻擊！造成 ${mCrit ? "<span class='crit-text'>致命 " : ""}${mDmg}${mCrit ? "</span>" : ""} 點傷害。`;
-         }
-         
-         this.renderEvent(`⚔️ 戰鬥中 - ${enemy.name}`, 
-             `敵方 HP: ${Math.max(0, enemy.hp)}`, 
-             logHtml, enemy.icon);
- 
-         if (Player.hp <= 0) {
-             this.playerDie(`被 ${enemy.name} 殺死`);
-         } else {
-             this.updateUI();
-         }
-     },
- 
--    combatWin() {
--        const enemy = GameState.currentEnemy;
--        GameState.phase = "event_end";
-+    combatWin() {
-+        const enemy = GameState.currentEnemy;
-+        const isBigBoss = enemy && enemy.isBigBoss;
-+        GameState.phase = "event_end";
-         
-         if(Player.depth === 1000 && enemy.tier === 'boss') {
-             Player.kill1000Boss = true;
-         }
- 
-         let drops = [];
-         let dropText = "";
- 
-         let gold = enemy.baseGold;
-         if (enemy.tier === "elite") gold *= 2;
-         if (enemy.tier === "boss") gold *= 5;
-         
-         Player.gold += gold;
-         this.showFloatingText(`+${gold} G`, "#ffd700");
-         dropText += `金幣 +${gold} <br>`;
- 
-         if (enemy.isTrueForm) {
-             if (CONFIG.lootData["真實之心"]) {
-                 let loot = { ...CONFIG.lootData["真實之心"], name: "真實之心", type: "loot" };
-                 drops.push(loot);
-             }
-         } else {
-             if (Math.random() < 0.7) {
-                 if (CONFIG.lootData[enemy.drop]) {
-                     let loot = { ...CONFIG.lootData[enemy.drop], name: enemy.drop, type: "loot" };
-@@ -1638,59 +1646,72 @@ const Game = {
-             if (enemy.tier === "elite" || enemy.tier === "boss") {
-                 if (Math.random() < 0.3 && CONFIG.lootData[enemy.eliteDrop]) {
-                     let loot = { ...CONFIG.lootData[enemy.eliteDrop], name: enemy.eliteDrop, type: "loot" };
-                     drops.push(loot);
-                 }
-             }
-             if (enemy.tier === "boss") {
-                 if (Math.random() < 0.1 && CONFIG.lootData[enemy.bossDrop]) {
-                     let loot = { ...CONFIG.lootData[enemy.bossDrop], name: enemy.bossDrop, type: "loot" };
-                     drops.push(loot);
-                 }
-             }
-         }
- 
-         if (Math.random() < 0.1) {
-             drops.push(this.generateRandomItem(enemy.tier));
-         }
- 
-         drops.forEach(item => {
-             this.addItemToInventory(item);
-             let colorClass = item.rarity ? CONFIG.rarityDisplay[item.rarity].color : "";
-             if(item.rarity === 'mythic') colorClass = 'rarity-mythic';
-             dropText += `獲得 <span class='${colorClass}'>${item.name}</span><br>`;
-         });
- 
--        let winTitle = enemy.isTrueForm ? "👑 弒神者" : "🏆 戰鬥勝利";
--        let winMsg = enemy.isTrueForm ? "你擊敗了魔王真身，傳說將永遠流傳！" : "你擊敗了敵人！";
--
--        this.renderEvent(winTitle, winMsg, dropText || "沒有掉落任何物品。", "🎉");
--        document.getElementById('event-icon').className = "monster-icon"; 
--        
--        this.checkAchievements();
--        this.setButtons("繼續", "nextEvent", "無", null, true);
--        this.updateUI();
-+        if (isBigBoss) {
-+            Player.hp = Player.maxHp;
-+            this.showFloatingText("HP 全滿", "#69f0ae");
-+        }
-+
-+        let winTitle = enemy.isTrueForm ? "👑 弒神者" : "🏆 戰鬥勝利";
-+        let winMsg = enemy.isTrueForm ? "你擊敗了魔王真身，傳說將永遠流傳！" : "你擊敗了敵人！";
-+        if (isBigBoss) {
-+            winTitle = "👑 Boss 討伐成功";
-+            winMsg += "<br><span class='gold-text'>自動回滿血，並獲得一個金色寶箱！</span>";
-+        }
-+
-+        this.renderEvent(winTitle, winMsg, dropText || "沒有掉落任何物品。", "🎉");
-+        document.getElementById('event-icon').className = "monster-icon";
-+
-+        this.checkAchievements();
-+        if (isBigBoss) {
-+            this.setButtons("打開金色寶箱", "claimBossChest", "無", null, true);
-+        } else {
-+            this.setButtons("繼續", "nextEvent", "無", null, true);
-+        }
-+        this.updateUI();
-     },
- 
-     flee() {
-         // ✅ 外掛版：所有敵人（包含每 20 層的大Boss）逃跑必定成功
-         const enemy = GameState.currentEnemy;
-         GameState.phase = "event_end";
- 
-         let extraNote = "";
-         if (enemy && enemy.isBigBoss) {
-             extraNote = "<br><small>第 20 層倍數的大Boss戰：逃跑成功率 100%</small>";
-         }
- 
-         this.renderEvent(
-             "💨 逃跑成功", 
-             "你果斷撤退，怪物無法追上你。", 
-             extraNote,
-             "🏃"
-         );
-         document.getElementById('event-icon').className = "monster-icon";
-         this.setButtons("繼續", "nextEvent", "無", null, true);
-         this.updateUI();
-     },
- 
- 
- 
- 
-EOF
-)
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <title>幻想冒險 - Abyss Reborn</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: white;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+        .stats, .inventory, .actions, .event {
+            border: 1px solid #444;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            background-color: #2b2b2b;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: orange;
+            border: none;
+            margin: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+        button:hover {
+            background-color: #ffae42;
+        }
+        .golden {
+            color: gold;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+ <body>
+<div class="container">
+    <h1>⚔ 幻想冒險 Abyss Reborn</h1>
+
+    <div id="stats" class="stats"></div>
+    <div id="event" class="event"></div>
+    <div id="actions" class="actions"></div>
+    <div id="inventory" class="inventory"></div>
+</div>
+
+  <script>
+// ===== 玩家數據 =====
+const Player = {
+    name: "冒險者",
+    baseAtk: 10,
+    maxHP: 100,
+    hp: 100,
+    gold: 200,
+    depth: 1,
+    inventory: {
+        equipment: [],
+    },
+    equipment: { weapon: null, armor: null, shield: null },
+};
+
+// ===== 裝備池（可擴充）=====
+const CONFIG = {
+    rarityProb: { legendary: 0.05, epic: 0.15, rare: 0.3, common: 0.5 },
+    itemPool: [
+        { name: "神之光輝", rarity: "legendary", type: "weapon", val: 50 },
+        { name: "鳳凰聖盾", rarity: "legendary", type: "shield", val: 40 },
+        { name: "天使羽衣", rarity: "legendary", type: "armor", val: 45 },
+        { name: "龍焰之斧", rarity: "epic", type: "weapon", val: 40 },
+        { name: "秘銀之盾", rarity: "epic", type: "shield", val: 32 },
+        { name: "精靈輕甲", rarity: "epic", type: "armor", val: 34 },
+        { name: "鋼鐵長劍", rarity: "rare", type: "weapon", val: 25 },
+        { name: "騎士盾牌", rarity: "rare", type: "shield", val: 20 },
+        { name: "獵人皮甲", rarity: "rare", type: "armor", val: 22 },
+        { name: "木棒", rarity: "common", type: "weapon", val: 5 },
+        { name: "破舊盾牌", rarity: "common", type: "shield", val: 5 },
+        { name: "布甲", rarity: "common", type: "armor", val: 6 },
+    ],
+};
+
+// ====== 核心 Game 物件 =====
+const Game = {
+    // 取得攻擊力
+    getAtk() {
+        let atk = Player.baseAtk;
+        if (Player.equipment.weapon) atk += Player.equipment.weapon.val;
+        return atk;
+    },
+
+    // 是否已有傳說裝備（含背包）
+    hasLegendaryEquip() {
+        const check = (item) => item && item.rarity === "legendary";
+        if (check(Player.equipment.weapon) ||
+            check(Player.equipment.armor) ||
+            check(Player.equipment.shield)) return true;
+        return Player.inventory.equipment.some(check);
+    },
+
+    // 生成裝備（含保底機制）
+    generateRandomItem(tierModifier = "normal") {
+        const needGuaranteeLegend = Player.depth >= 15 && !this.hasLegendaryEquip();
+        let rarityKey = needGuaranteeLegend ? "legendary" : this.getRandomRarity();
+
+        let pool = CONFIG.itemPool.filter(i => i.rarity === rarityKey);
+
+        if (needGuaranteeLegend) {
+            pool = pool.filter(i => ["weapon", "armor", "shield"].includes(i.type));
+        }
+        const item = pool[Math.floor(Math.random() * pool.length)];
+        return { ...item };
+    },
+
+    getRandomRarity() {
+        const r = Math.random();
+        const table = CONFIG.rarityProb;
+        let acc = 0;
+        for (let key in table) {
+            acc += table[key];
+            if (r <= acc) return key;
+        }
+        return "common";
+    },
+
+    // 固定事件順序（取消祈禱、陷阱）
+    getEventTypeForDepth(depth) {
+        if (depth % 20 === 0) return "boss";
+        if (depth % 5 === 1) return "combat";
+        if (depth % 5 === 2) return "merchant";
+        if (depth % 5 === 3) return Player.hp < Player.maxHP * 0.8 ? "heal" : "combat";
+        if (depth % 5 === 4) return "chest";
+        return "combat";
+    },
+
+    // 主事件控制器
+    nextEvent() {
+        const eventType = this.getEventTypeForDepth(Player.depth);
+        if (eventType === "combat") this.triggerCombat();
+        if (eventType === "merchant") this.triggerMerchant();
+        if (eventType === "heal") this.triggerHeal();
+        if (eventType === "chest") this.triggerChest(true);
+        if (eventType === "boss") this.triggerBossBattle();
+        this.updateUI();
+    },
+
+    triggerCombat() {
+        document.getElementById("event").innerHTML = `⚔ 第 ${Player.depth} 層 遭遇怪物！戰鬥開始！`;
+        document.getElementById("actions").innerHTML = `
+            <button onclick="Game.winCombat()">戰鬥勝利</button>
+            <button onclick="Game.escape()">逃跑（100%成功）</button>
+        `;
+    },
+
+    winCombat() {
+        Player.gold += 50;
+        Player.depth++;
+        this.nextEvent();
+    },
+
+    triggerMerchant() {
+        document.getElementById("event").innerHTML = `🛒 商店出現！你可以購買或離開。`;
+        document.getElementById("actions").innerHTML = `<button onclick="Game.leave()">離開</button>`;
+    },
+
+    triggerHeal() {
+        Player.hp = Math.min(Player.maxHP, Player.hp + 30);
+        document.getElementById("event").innerHTML = `❤️ 回復事件！你的生命恢復到 ${Player.hp}`;
+        document.getElementById("actions").innerHTML = `<button onclick="Game.leave()">繼續前進</button>`;
+    },
+
+    triggerChest(isGolden = false) {
+        let item;
+        if (isGolden) {
+            document.getElementById("event").innerHTML = "🗝 金色寶箱出現！必掉落寶物！";
+            if (!this.hasLegendaryEquip()) {
+                item = CONFIG.itemPool.find(i => i.rarity === "legendary");
+            } else {
+                item = this.generateRandomItem("boss");
+            }
+        } else {
+            item = this.generateRandomItem();
+        }
+        Player.inventory.equipment.push(item);
+        document.getElementById("actions").innerHTML = `
+            <p>🎁 獲得：<span class="golden">${item.name}</span></p>
+            <button onclick="Game.leave()">繼續前進</button>
+        `;
+    },
+
+    triggerBossBattle() {
+        document.getElementById("event").innerHTML =
+            `👑 極限Boss出現！第 ${Player.depth} 層守門者登場！`;
+        document.getElementById("actions").innerHTML = `
+            <button onclick="Game.winBoss()">擊敗Boss</button>
+            <button onclick="Game.escape()">逃跑（100%成功）</button>
+        `;
+    },
+
+    winBoss() {
+        Player.hp = Player.maxHP;
+        Player.depth++;
+        this.triggerChest(true);
+    },
+
+    escape() {
+        Player.depth++;
+        this.nextEvent();
+    },
+
+    leave() {
+        Player.depth++;
+        this.nextEvent();
+    },
+
+    updateUI() {
+        document.getElementById("stats").innerHTML = `
+            🔹 名稱：${Player.name}<br>
+            ❤️ HP：${Player.hp}/${Player.maxHP}<br>
+            💰 金幣：${Player.gold}<br>
+            🗡 攻擊力：${this.getAtk()}<br>
+            ⛳ 深度：第 ${Player.depth} 層<br>
+        `;
+        document.getElementById("inventory").innerHTML = `
+            🎒 裝備背包：${Player.inventory.equipment.map(i => i.name).join(", ") || "無"}
+        `;
+    },
+};
+
+window.onload = () => Game.nextEvent();
+</script>
