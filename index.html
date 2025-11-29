@@ -891,6 +891,7 @@ const Game = {
         this.checkAchievements();
         this.log(`>>> 進入第 ${Player.depth} 層探索...`);
         
+        // 天使之歌：每層回 5HP
         if (Player.buff && Player.buff.id === 'angel_song') {
             if (Player.hp < Player.maxHp) {
                 Player.hp = Math.min(Player.maxHp, Player.hp + 5);
@@ -898,13 +899,14 @@ const Game = {
             }
         }
 
-        // Event Logic
+        // 特殊深層魔王（原本1000層真身邏輯保留）
         if (Player.depth >= 1000 && (Player.depth - 1000) % 500 === 0) {
             this.triggerCombat(true, true); 
             this.updateUI();
             return;
         }
 
+        // 原本 500 層 Boss 保留
         if (Player.depth === 500) {
             this.triggerCombat(true, false); 
             this.updateUI();
@@ -915,29 +917,52 @@ const Game = {
             alert("警告：你已進入深層領域！所有怪物實力大幅增強！");
         }
         
-        // Trip Event (0.5% after depth 100)
+        // 跌倒事件 (0.5% after depth 100)
         if (Player.depth > 100 && Math.random() < 0.005) {
             this.triggerTrip();
             this.updateUI();
             return;
         }
 
+        // 哈比事件 (1% after depth 200)
         if (Player.depth > 200 && Math.random() < 0.01) {
             this.triggerHarpy();
             this.updateUI();
             return;
         }
 
-        // 特別版：奇數層必定戰鬥，偶數層必定職業事件
-        if (Player.depth % 2 === 1) {
-            this.triggerCombat(false, false);
-        } else {
-            this.triggerClassEvent();
+        // ✅ 每 20 層必定遇到一個「大 Boss」
+        if (Player.depth % 20 === 0) {
+            // 第 20, 40, 60, ... 層：大Boss戰
+            this.triggerCombat(false, false, true);  // 第三個參數標記為大Boss
+            this.updateUI();
+            return;
+        }
+
+        // ✅ 按層數循環體驗事件：
+        // 1 層型：戰鬥
+        // 2 層型：商店
+        // 3 層型：祈禱
+        // 4 層型：寶箱
+        // 5 層型：休息回血
+        // 然後再從 1 重新循環
+        const mod = Player.depth % 5;
+
+        if (mod === 1) {
+            this.triggerCombat(false, false);   // 一般戰鬥
+        } else if (mod === 2) {
+            this.triggerMerchant();             // 商店
+        } else if (mod === 3) {
+            this.triggerStatue();               // 祈禱（天使／惡魔）
+        } else if (mod === 4) {
+            this.triggerChest();                // 寶箱
+        } else { // mod === 0
+            this.triggerHeal();                 // 休息回血
         }
         
         this.updateUI();
-
     },
+
     
     // --- Updated Trip Event (0.5% Prob, 70/30 or Hook) ---
     triggerTrip() {
@@ -1405,7 +1430,7 @@ const Game = {
         return activeMonsters[0];
     },
 
-    triggerCombat(isForcedBoss, checkTrueForm) {
+    triggerCombat(isForcedBoss, checkTrueForm, isBigBoss) {
         GameState.phase = "combat";
         
         let baseMonster;
@@ -1413,20 +1438,25 @@ const Game = {
         let canFlee = true;
 
         if (isForcedBoss) {
+            // 強制魔王（原本 500 / 1000 層邏輯）
             baseMonster = CONFIG.monsters[9]; 
             tier = "boss";
-            canFlee = false;
+            canFlee = false;   // 這種戰鬥禁止逃跑（按你之前的設計保留）
         } else {
             baseMonster = this.getWeightedMonster();
             let rand = Math.random();
             if (Player.depth > 300) {
-                if (rand < 0.1) tier = "normal";        // 0% -> 10%
-                else if (rand < 0.55) tier = "elite";   // 50% -> 45%
-                else tier = "boss";                     // 50% -> 45%
+                if (rand < 0.10) tier = "normal";
+                else if (rand < 0.55) tier = "elite";
+                else tier = "boss";
             } else if (Player.depth > 100) {
-                if (rand < 0.1) tier = "boss"; else if (rand < 0.6) tier = "elite"; else tier = "normal";
+                if (rand < 0.10) tier = "boss";
+                else if (rand < 0.60) tier = "elite";
+                else tier = "normal";
             } else {
-                if (rand < 0.01) tier = "boss"; else if (rand < 0.11) tier = "elite"; else tier = "normal";
+                if (rand < 0.01) tier = "boss";
+                else if (rand < 0.11) tier = "elite";
+                else tier = "normal";
             }
         }
 
@@ -1438,8 +1468,24 @@ const Game = {
             namePrefix += "深淵 ";
         }
 
-        if (tier === "elite") { hpMul *= 2; atkMul *= 1.5; namePrefix += "菁英 "; }
-        else if (tier === "boss") { hpMul *= 3; atkMul *= 2; namePrefix += "首領 "; }
+        if (tier === "elite") { 
+            hpMul *= 2; 
+            atkMul *= 1.5; 
+            namePrefix += "菁英 "; 
+        } else if (tier === "boss") { 
+            hpMul *= 3; 
+            atkMul *= 2; 
+            namePrefix += "首領 "; 
+        }
+
+        // ✅ 每 20 層大 Boss 強化 & 標記
+        if (isBigBoss) {
+            tier = "boss";
+            hpMul *= 1.5;                 // 大Boss稍微再坦一點（你要我也可以幫你調）
+            atkMul *= 1.2;
+            namePrefix = `第 ${Player.depth} 層守門者 `;
+            canFlee = true;               // 大Boss 允許逃跑，且 flee() 會 100% 成功
+        }
 
         let enemy = {
             ...baseMonster,
@@ -1463,6 +1509,11 @@ const Game = {
             }
         }
 
+        // ✅ 標記「大Boss」，方便 flee() 內判斷
+        if (isBigBoss) {
+            enemy.isBigBoss = true;
+        }
+
         GameState.currentEnemy = enemy;
 
         let iconClass = "monster-icon";
@@ -1473,12 +1524,16 @@ const Game = {
         document.getElementById('event-icon').className = iconClass;
         this.triggerAnim('event-icon', 'anim-spawn');
         
-        this.renderEvent(`⚔️ 遭遇 ${GameState.currentEnemy.name}`, 
+        this.renderEvent(
+            `⚔️ 遭遇 ${GameState.currentEnemy.name}`, 
             `HP: ${GameState.currentEnemy.hp} | 攻擊: ${GameState.currentEnemy.atk}`, 
-            "準備戰鬥！", GameState.currentEnemy.icon);
+            "準備戰鬥！", 
+            GameState.currentEnemy.icon
+        );
         
         this.setButtons("戰鬥", "combatRound", "逃跑", "flee", !canFlee);
     },
+
 
     combatRound() {
         if (GameState.phase !== "combat") return;
@@ -1654,22 +1709,26 @@ const Game = {
     },
 
     flee() {
-        // 外掛版：逃跑必定成功，不再判定失敗、不再掉血
-        if (GameState.phase !== "combat") return;
-
-        GameState.phase = "event_end";
+        // ✅ 外掛版：所有敵人（包含每 20 層的大Boss）逃跑必定成功
         const enemy = GameState.currentEnemy;
+        GameState.phase = "event_end";
+
+        let extraNote = "";
+        if (enemy && enemy.isBigBoss) {
+            extraNote = "<br><small>第 20 層倍數的大Boss戰：逃跑成功率 100%</small>";
+        }
 
         this.renderEvent(
-            "💨 逃跑成功",
-            `你成功甩掉了 ${enemy ? enemy.name : "敵人"}。`,
-            "",
+            "💨 逃跑成功", 
+            "你果斷撤退，怪物無法追上你。", 
+            extraNote,
             "🏃"
         );
         document.getElementById('event-icon').className = "monster-icon";
         this.setButtons("繼續", "nextEvent", "無", null, true);
         this.updateUI();
     },
+
 
 
     playerDie(reason) {
@@ -1906,5 +1965,6 @@ Game.init();
 </script>
 </body>
 </html>
+
 
 
