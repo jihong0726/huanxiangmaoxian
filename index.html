@@ -928,23 +928,15 @@ showCredits() {
             return;
         }
 
-        const rand = Math.random();
-        
-        if (rand < 0.05) {
-            this.triggerHeal();
-        } else if (rand < 0.10) {
-            this.triggerStatue();
-        } else if (rand < 0.13) {
-            this.triggerClassEvent();
-        } else if (rand < 0.30) {
-            this.triggerMerchant();
-        } else if (rand < 0.40) {
-            this.triggerChest();
-        } else {
+                // 特別版：奇數層必定戰鬥，偶數層必定職業事件
+        if (Player.depth % 2 === 1) {
             this.triggerCombat(false, false);
+        } else {
+            this.triggerClassEvent();
         }
         
         this.updateUI();
+
     },
     
     // --- Updated Trip Event (0.5% Prob, 70/30 or Hook) ---
@@ -964,7 +956,7 @@ showCredits() {
         const isApe = Player.class === 'ape';
 
         // Determine Outcome: 30% Good (or Hook or Ape), 70% Bad
-        const isGoodOutcome = useHook || isApe || (Math.random() < 0.3);
+                const isGoodOutcome = true;
 
         if (isGoodOutcome) {
             // Good Outcome: Catch cliff -> Get random equipment
@@ -1135,54 +1127,14 @@ showCredits() {
     triggerHarpy() {
         GameState.phase = "event_end";
         this.triggerAnim('event-icon', 'anim-spawn');
-        
-        // Check for Scarecrow Class
-        if (Player.class === 'scarecrow') {
-            Player.gold += 500;
-            this.showFloatingText("+500 G", "#ffd700");
-            this.renderEvent("🦅 遭遇哈比", "一隻哈比突然襲來！", 
-                "身為稻草人，你的外表嚇跑了哈比！<br>撿到了牠掉落的 <span class='gold-text'>500 G</span>！", "🌾");
-            this.setButtons("繼續", "nextEvent", "無", null, true);
-            return;
-        }
 
-        // Check for Slingshot
-        const slingIndex = Player.inventory.material.findIndex(i => i.name === '彈弓');
-        if (slingIndex !== -1) {
-            Player.inventory.material.splice(slingIndex, 1);
-            Player.gold += 500;
-            this.showFloatingText("+500 G", "#ffd700");
-            this.renderEvent("🦅 遭遇哈比", "一隻哈比突然襲來！", `你使用 <span class='rarity-rare'>彈弓</span> 擊退了牠！(彈弓已損壞)<br>撿到了牠掉落的 <span class='gold-text'>500 G</span>！`, "🪃");
-            this.setButtons("繼續", "nextEvent", "無", null, true);
-            return;
-        }
+        // 特別版：永遠成功擊退哈比，獲得 500 G
+        Player.gold += 500;
+        this.showFloatingText("+500 G", "#ffd700");
+        const title = "🦅 遭遇哈比";
+        const desc = "你冷靜應對，成功擊退了哈比，撿到了牠掉落的 <span class='gold-text'>500 G</span>！";
+        const icon = "🦅";
 
-        let outcome = Math.random();
-        let title = "🦅 遭遇哈比";
-        let desc = "";
-        let icon = "🦅";
-
-        if (outcome < 0.2) {
-            Player.gold += 500;
-            this.showFloatingText("+500 G", "#ffd700");
-            desc = "你成功擊退了哈比，撿到了它掉落的 <span class='gold-text'>500 G</span>！";
-        } else {
-            const type = Math.floor(Math.random() * 4);
-            if (type === 0) {
-                Player.inventory.equipment = [];
-                desc = "哈比搶走了你背包裡所有的 <span class='damage-text'>裝備</span>！";
-            } else if (type === 1) {
-                Player.inventory.consumable = [];
-                desc = "哈比搶走了你背包裡所有的 <span class='damage-text'>消耗品</span>！";
-            } else if (type === 2) {
-                Player.inventory.material = [];
-                desc = "哈比搶走了你背包裡所有的 <span class='damage-text'>素材</span>！";
-            } else {
-                Player.gold = 0;
-                desc = "哈比搶走了你身上所有的 <span class='damage-text'>金幣</span>！";
-            }
-        }
-        
         this.renderEvent(title, "一隻哈比突然從空中襲來！", desc, icon);
         this.setButtons("繼續", "nextEvent", "無", null, true);
     },
@@ -1206,28 +1158,24 @@ showCredits() {
         this.setButtons("祈禱", "pray", "離開", "nextEvent", false);
     },
 
-    pray() {
-        if (!CONFIG.buffs) return; 
-        
-        const isAngel = Math.random() < 0.5;
-        const type = isAngel ? 'angel' : 'demon';
-        const icon = isAngel ? "👼" : "😈";
-        const options = Object.values(CONFIG.buffs).filter(b => b.type === type);
-        
-        if (options.length === 0) return;
+        pray() {
+        if (!CONFIG.buffs) return;
 
-        const selected = options[Math.floor(Math.random() * options.length)];
+        // 特別版：永遠是天使勇氣 buff
+        const selected = CONFIG.buffs.angel_courage;
         Player.buff = selected;
-        
-        let title = isAngel ? "天使聖像" : "惡魔聖像";
-        let style = isAngel ? "angel-text" : "demon-text";
-        
+
+        const title = "天使聖像";
+        const style = "angel-text";
+        const icon = "👼";
+
         this.triggerAnim('event-icon', 'anim-spawn');
-        let desc = `你獲得了 <span class='${style}'>${selected.name}</span> 的效果。<br><small>${selected.desc}</small>`;
+        const desc = `你獲得了 <span class='${style}'>${selected.name}</span> 的效果。<br><small>${selected.desc}</small>`;
         this.renderEvent(title, "祈禱得到了回應...", desc, icon);
         this.setButtons("繼續", "nextEvent", "無", null, true);
         this.updateUI();
     },
+
 
     triggerMerchant() {
         GameState.phase = "merchant";
@@ -1359,25 +1307,17 @@ showCredits() {
         GameState.phase = "event_end";
         this.triggerAnim('event-icon', 'anim-spawn');
 
-        // Phoenix Feather Check
-        if (Math.random() < 0.01) {
-            const feather = {...CONFIG.phoenixFeather};
-            this.addItemToInventory(feather);
-            this.renderEvent("📦 發現寶箱", "你打開了寶箱...", "奇蹟發生了！你獲得了 <span class='rarity-legendary'>不死鳥的羽毛</span>！", "🪶");
-            this.setButtons("繼續", "nextEvent", "無", null, true);
-            return;
-        }
-        
-        // Slingshot Check (1%)
-        if (Math.random() < 0.01) {
-            if (CONFIG.lootData["彈弓"]) {
-                const item = { ...CONFIG.lootData["彈弓"], name: "彈弓", type: "material" };
-                this.addItemToInventory(item);
-                this.renderEvent("📦 發現寶箱", "你打開了寶箱...", `獲得了特殊的工具 <span class='rarity-rare'>彈弓</span>！`, "🪃");
-                this.setButtons("繼續", "nextEvent", "無", null, true);
-                return;
-            }
-        }
+        // 特別版：寶箱永遠給不死鳥的羽毛
+        const feather = { ...CONFIG.phoenixFeather };
+        this.addItemToInventory(feather);
+        this.renderEvent(
+            "📦 發現寶箱",
+            "你打開了寶箱...",
+            "奇蹟發生了！你獲得了 <span class='rarity-legendary'>不死鳥的羽毛</span>！",
+            "🪶"
+        );
+        this.setButtons("繼續", "nextEvent", "無", null, true);
+    },
 
         // Hook Check (1%)
         if (Math.random() < 0.01) {
@@ -1997,4 +1937,5 @@ Game.init();
 </script>
 </body>
 </html>
+
 
