@@ -1310,25 +1310,18 @@ showCredits() {
         // 特別版：寶箱永遠給不死鳥的羽毛
         const feather = { ...CONFIG.phoenixFeather };
         this.addItemToInventory(feather);
+
         this.renderEvent(
             "📦 發現寶箱",
             "你打開了寶箱...",
             "奇蹟發生了！你獲得了 <span class='rarity-legendary'>不死鳥的羽毛</span>！",
             "🪶"
         );
+
         this.setButtons("繼續", "nextEvent", "無", null, true);
     },
 
-        // Hook Check (1%)
-        if (Math.random() < 0.01) {
-            if (CONFIG.lootData["鉤子"]) {
-                const item = { ...CONFIG.lootData["鉤子"], name: "鉤子", type: "material" };
-                this.addItemToInventory(item);
-                this.renderEvent("📦 發現寶箱", "你打開了寶箱...", `獲得了特殊的工具 <span class='rarity-rare'>鉤子</span>！`, "🪝");
-                this.setButtons("繼續", "nextEvent", "無", null, true);
-                return;
-            }
-        }
+
 
         const roll = Math.random();
         let title = "📦 發現寶箱";
@@ -1937,5 +1930,6 @@ Game.init();
 </script>
 </body>
 </html>
+
 
 
