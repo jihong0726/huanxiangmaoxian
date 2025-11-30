@@ -382,168 +382,146 @@
 </div>
 
 <script>
-// ===== 玩家初始設定 =====
-let player = {
-  hp: 100,
-  maxHp: 100,
-  atk: 10,
-  gold: 50,
-  floor: 1,
-  artifacts: [],
-  class: null
+const Game = {
+  player: {
+    hp: 100,
+    maxHp: 100,
+    atk: 10,
+    gold: 50,
+    floor: 1,
+    artifacts: [],
+    class: null
+  },
+
+  artifactPool: [
+    "🌞 神之光輝", "⚡ 雷霆之心", "🔥 不滅火種", "💎 永恆水晶", "🌙 暗影之契"
+  ],
+
+  classes: {
+    knight: { name: "騎士", hp: 120, atk: 12 },
+    merchant: { name: "商販", gold: 200, atk: 8 },
+    thief: { name: "盜賊", hp: 100, atk: 10 },
+    cultist: { name: "惡魔信徒", hp: 90, atk: 11 },
+    druid: { name: "稻草人", hp: 110, atk: 9 },
+    ape: { name: "人猿", hp: 130, atk: 7 },
+    challenger: { name: "挑戰者", hp: 100, atk: 10 }
+  },
+
+  getEvent(floor) {
+    if (floor % 20 === 0) return "boss";
+    const seq = ["battle", "shop", "treasure", "battle", "heal"];
+    return seq[(floor - 1) % 5];
+  },
+
+  openTreasure() {
+    let available = this.artifactPool.filter(a => !this.player.artifacts.includes(a));
+    if (available.length > 0) {
+      let pick = available[Math.floor(Math.random() * available.length)];
+      this.player.artifacts.push(pick);
+      return `📦 你打開了金色寶箱！獲得神器：<span class="mythic-text">${pick}</span>`;
+    } else {
+      let gold = Math.floor(Math.random() * 200) + 200;
+      this.player.gold += gold;
+      return `✨ 所有神器已收集！獲得 <span class="gold-text">${gold} 金幣</span>`;
+    }
+  },
+
+  battleEvent() {
+    this.player.gold += 50;
+    this.updateUI(`⚔️ 遭遇怪物並戰勝！<br>🔥 永遠暴擊 (${this.player.atk * 2} 傷害)<br>💰 獲得 50 金幣`);
+    this.renderChoices(["繼續前進"]);
+  },
+
+  shopEvent() {
+    this.updateUI(`🛒 遇到商人<br>花費 50 金幣 ➤ 永久 +5 攻擊力`);
+    this.renderChoices(["購買提升", "跳過"]);
+  },
+
+  healEvent() {
+    if (this.player.hp >= this.player.maxHp * 0.8) {
+      this.battleEvent();
+      return;
+    }
+    let gain = Math.floor(this.player.maxHp * 0.3);
+    this.player.hp = Math.min(this.player.maxHp, this.player.hp + gain);
+    this.updateUI(`🛌 你休息並恢復了 <span class="heal-text">${gain} HP</span>`);
+    this.renderChoices(["繼續前進"]);
+  },
+
+  bossEvent() {
+    let reward = this.openTreasure();
+    this.player.hp = this.player.maxHp;
+    this.player.gold += 200;
+    this.updateUI(`
+      👑 Big Boss 出現！<br>
+      🏃‍♂️ 你選擇逃跑 —— 永遠成功<br><br>
+      ${reward}<br><br>
+      ❤️ 回滿生命值<br>
+      💰 額外獲得 200 金幣
+    `);
+    this.renderChoices(["進入下一輪"]);
+  },
+
+  renderChoices(options) {
+    const c = document.getElementById("controls");
+    c.innerHTML = "";
+    options.forEach(text => {
+      let btn = document.createElement("button");
+      btn.innerHTML = text;
+      btn.className = "btn-primary";
+      btn.onclick = () => this.handleChoice(text);
+      c.appendChild(btn);
+    });
+  },
+
+  handleChoice(choice) {
+    if (choice === "購買提升" && this.player.gold >= 50) {
+      this.player.gold -= 50;
+      this.player.atk += 5;
+    }
+    this.player.floor++;
+    this.nextEvent();
+  },
+
+  updateUI(message = "") {
+    document.getElementById("event-desc").innerHTML = message;
+    document.getElementById("hp-val").innerText = this.player.hp;
+    document.getElementById("max-hp-val").innerText = this.player.maxHp;
+    document.getElementById("atk-val").innerText = this.player.atk;
+    document.getElementById("gold-val").innerText = this.player.gold;
+    document.getElementById("depth-val").innerText = this.player.floor;
+  },
+
+  nextEvent() {
+    const evt = this.getEvent(this.player.floor);
+    if (evt === "battle") this.battleEvent();
+    if (evt === "shop") this.shopEvent();
+    if (evt === "treasure") { this.updateUI(this.openTreasure()); this.renderChoices(["繼續前進"]); }
+    if (evt === "heal") this.healEvent();
+    if (evt === "boss") this.bossEvent();
+  },
+
+  selectClass(classKey) {
+    const job = this.classes[classKey];
+    this.player.class = job.name;
+    this.player.hp = job.hp || this.player.hp;
+    this.player.maxHp = job.hp || this.player.maxHp;
+    if (job.gold) this.player.gold += job.gold;
+    this.player.atk = job.atk || this.player.atk;
+    document.getElementById("class-modal").style.display = "none";
+    this.nextEvent();
+  }
 };
-
-// ===== 神器池（不重複）=====
-const artifactPool = [
-  "🌞 神之光輝",
-  "⚡ 雷霆之心",
-  "🔥 不滅火種",
-  "💎 永恆水晶",
-  "🌙 暗影之契"
-];
-
-// ===== 職業資料 =====
-const classes = {
-  knight: { name: "騎士", hp: 120, atk: 12 },
-  merchant: { name: "商販", gold: 200, atk: 8 },
-  thief: { name: "盜賊", hp: 100, atk: 10 },
-  cultist: { name: "惡魔信徒", hp: 90, atk: 11 },
-  druid: { name: "稻草人", hp: 110, atk: 9 },
-  ape: { name: "人猿", hp: 130, atk: 7 },
-  challenger: { name: "挑戰者", hp: 100, atk: 10 }
-};
-
-// ===== 樓層事件機制 —— 戰鬥 → 商店 → 寶箱 → 戰鬥 → 回血 =====
-function getEvent(floor) {
-  if (floor % 20 === 0) return "boss";
-  const seq = ["battle", "shop", "treasure", "battle", "heal"];
-  return seq[(floor - 1) % 5];
-}
-
-// ===== UI 更新 =====
-function updateUI(message = "") {
-  document.getElementById("event-display").innerHTML = message;
-  document.getElementById("stats-display").innerHTML = `
-    ❤️ HP: ${player.hp}/${player.maxHp}<br>
-    ⚔️ 攻擊力: ${player.atk}<br>
-    💰 金幣: ${player.gold}<br>
-    🏔 深度: ${player.floor} 層
-  `;
-  document.getElementById("inventory-display").innerHTML =
-    player.artifacts.length
-      ? player.artifacts.join("、")
-      : "（尚未獲得神器）";
-}
-
-// ===== 寶箱（神器優先、不重覆）=====
-function openTreasure() {
-  let available = artifactPool.filter(a => !player.artifacts.includes(a));
-  if (available.length > 0) {
-    let pick = available[Math.floor(Math.random() * available.length)];
-    player.artifacts.push(pick);
-    return `📦 你打開了金色寶箱！獲得神器：<span class="text-amber-400">${pick}</span>`;
-  } else {
-    let gold = Math.floor(Math.random() * 200) + 200;
-    player.gold += gold;
-    return `✨ 所有神器已收集！獲得 <span class="text-yellow-300">${gold} 金幣</span>`;
-  }
-}
-
-// ===== 戰鬥事件（永遠暴擊+逃跑永遠成功）=====
-function battleEvent() {
-  player.gold += 50;
-  updateUI(`⚔️ 遭遇怪物並戰勝！<br>🔥 永遠暴擊 (${player.atk * 2} 傷害)<br>💰 獲得 50 金幣`);
-  renderChoices(["繼續前進"]);
-}
-
-// ===== 商店事件 =====
-function shopEvent() {
-  updateUI(`🛒 遇到商人<br>花費 50 金幣 ➤ 永久 +5 攻擊力`);
-  renderChoices(["購買提升", "跳過"]);
-}
-
-// ===== 回血事件（HP≥80% → 改為戰鬥）=====
-function healEvent() {
-  if (player.hp >= player.maxHp * 0.8) {
-    battleEvent();
-    return;
-  }
-  let gain = Math.floor(player.maxHp * 0.3);
-  player.hp = Math.min(player.maxHp, player.hp + gain);
-  updateUI(`🛌 你休息並恢復了 <span class="text-green-400">${gain} HP</span>`);
-  renderChoices(["繼續前進"]);
-}
-
-// ===== Boss 戰（逃跑100%成功、神器必出、回血、金幣）=====
-function bossEvent() {
-  let reward = openTreasure();
-  player.hp = player.maxHp;
-  player.gold += 200;
-  updateUI(`
-    👑 Big Boss 出現！<br>
-    🏃‍♂️ 你選擇逃跑 —— 永遠成功<br><br>
-    ${reward}<br><br>
-    ❤️ 回滿生命值<br>
-    💰 額外獲得 200 金幣
-  `);
-  renderChoices(["進入下一輪"]);
-}
-
-// ===== 選項控制 =====
-function renderChoices(options) {
-  const c = document.getElementById("controls");
-  c.innerHTML = "";
-  options.forEach(text => {
-    let btn = document.createElement("button");
-    btn.innerHTML = text;
-    btn.className = "px-6 py-2 rounded bg-amber-600 hover:bg-amber-500";
-    btn.onclick = () => handleChoice(text);
-    c.appendChild(btn);
-  });
-}
-
-function handleChoice(choice) {
-  if (choice === "購買提升" && player.gold >= 50) {
-    player.gold -= 50;
-    player.atk += 5;
-  }
-  player.floor++;
-  nextEvent();
-}
-
-// ===== 核心事件引擎 =====
-function nextEvent() {
-  const evt = getEvent(player.floor);
-  if (evt === "battle") battleEvent();
-  if (evt === "shop") shopEvent();
-  if (evt === "treasure") { updateUI(openTreasure()); renderChoices(["繼續前進"]); }
-  if (evt === "heal") healEvent();
-  if (evt === "boss") bossEvent();
-}
-
-// ===== 職業選擇（修復無反應問題）=====
-function selectClass(classKey) {
-  const job = classes[classKey];
-  player.class = job.name;
-  player.hp = job.hp || player.hp;
-  player.maxHp = job.hp || player.maxHp;
-  if (job.gold) player.gold += job.gold;
-  player.atk = job.atk || player.atk;
-  document.getElementById("class-modal").style.display = "none";
-  nextEvent();
-}
 
 window.onload = function () {
-  document.querySelectorAll(".class-option").forEach(btn => {
-    const job = btn.getAttribute("data-class");
-    if (job) btn.onclick = () => selectClass(job);
-  });
-  updateUI("請選擇你的職業開始冒險！");
+  Game.updateUI("請選擇你的職業開始冒險！");
 };
-</script>
+
+
 
 
 </body>
 </html>
+
 
 
