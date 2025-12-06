@@ -1,11 +1,39 @@
-// fantasy_godstart.js
+/*
+ * -----------------------------------------
+ * Fantasy Adventure: GodStart Auto Equipment Mod
+ * -----------------------------------------
+ * 功能：在玩家“选择职业”后，自动装备最强开局套装
+ *
+ * 套装内容：
+ *  - 武器：虛空破滅劍 (w_void_breaker)
+ *  - 防具：末世之鎧 (a_apocalypse)
+ *  - 盾牌：魔神之壁 (s_demon_wall)
+ *  - 飾品：命運之輪 (acc_wheel)
+ *        ：混沌魔方 (acc_chaos)
+ *        ：超越魔方 (acc_transcendence)
+ *
+ * 注意：本补丁不修改原本遊戲邏輯，只“接管 + 擴充” selectClass()
+ * -----------------------------------------
+ * 作者：积宏 & ChatGPT
+ * 版本：1.0
+ */
+
 (function () {
+
+    /* 可開關除錯訊息（true = 顯示 debug log） */
+    const DEBUG = false;
+    const log = (...msg) => DEBUG && console.log("[GodStart]", ...msg);
+
+    /** 自动执行装备逻辑 */
     function applyGodStart() {
-        if (!window.Player || !window.CONFIG || !window.Game) {
+
+        // 🚫 如果主程式未載入，則不執行（避免報錯）
+        if (typeof Player === "undefined" || typeof CONFIG === "undefined" || typeof Game === "undefined") {
+            log("Player / CONFIG / Game 尚未就緒，跳過");
             return;
         }
 
-        // 确保结构存在
+        // 🛡 確保資料結構存在（避免 undefined 錯誤）
         if (!Player.equipment) {
             Player.equipment = {
                 weapon: null,
@@ -17,121 +45,72 @@
         if (!Player.equipment.accessories) {
             Player.equipment.accessories = [null, null, null];
         }
-        if (!Player.history) {
-            Player.history = { items: new Set() };
-        } else if (!Player.history.items) {
-            Player.history.items = new Set();
-        }
+        if (!Player.history) Player.history = { items: new Set() };
+        else if (!Player.history.items) Player.history.items = new Set();
 
-        var inferno = CONFIG.infernoItems || [];
-
-        function findById(id) {
-            for (var i = 0; i < inferno.length; i++) {
-                if (inferno[i].id === id) return inferno[i];
-            }
-            return null;
-        }
-
-        function cloneItem(tpl) {
-            var copy = {};
-            for (var k in tpl) {
-                if (Object.prototype.hasOwnProperty.call(tpl, k)) {
-                    copy[k] = tpl[k];
-                }
-            }
-            return copy;
-        }
-
-        function unlockToHistory(item) {
-            try {
-                if (Player.history && Player.history.items && typeof Player.history.items.add === "function") {
-                    Player.history.items.add(item.name);
-                }
-            } catch (e) {}
-        }
-
-        function equipMain(slot, item) {
-            if (!item) return;
-            // 原本穿着的装备丢回背包
-            if (Player.equipment[slot]) {
-                Game.addItemToInventory(Player.equipment[slot], false);
-            }
-            Player.equipment[slot] = item;
-            unlockToHistory(item);
-        }
-
-        function equipAccessory(slotIdx, item) {
-            if (!item) return;
-            if (!Player.equipment.accessories) {
-                Player.equipment.accessories = [null, null, null];
-            }
-            if (Player.equipment.accessories[slotIdx]) {
-                Game.addItemToInventory(Player.equipment.accessories[slotIdx], false);
-            }
-            Player.equipment.accessories[slotIdx] = item;
-            unlockToHistory(item);
-        }
-
-        // 这六件就是之前我们分析的最强组合：
-        // 武器：虛空破滅劍 w_void_breaker
-        // 防具：末世之鎧   a_apocalypse
-        // 盾牌：魔神之壁   s_demon_wall
-        // 饰品：命運之輪 acc_wheel
-        //       混沌魔方 acc_chaos
-        //       超越魔方 acc_transcendence
-        var wVoid  = findById("w_void_breaker");
-        var aApoc  = findById("a_apocalypse");
-        var sWall  = findById("s_demon_wall");
-        var accWheel = findById("acc_wheel");
-        var accChaos = findById("acc_chaos");
-        var accTrans = findById("acc_transcendence");
-
-        var wItem  = wVoid  ? cloneItem(wVoid)  : null;
-        var aItem  = aApoc  ? cloneItem(aApoc)  : null;
-        var sItem  = sWall  ? cloneItem(sWall)  : null;
-        var wheel  = accWheel ? cloneItem(accWheel) : null;
-        var chaos  = accChaos ? cloneItem(accChaos) : null;
-        var trans  = accTrans ? cloneItem(accTrans) : null;
-
-        // 主装备 3 件
-        equipMain("weapon", wItem);
-        equipMain("armor",  aItem);
-        equipMain("shield", sItem);
-
-        // 饰品 3 个，占满 3 格
-        equipAccessory(0, wheel);
-        equipAccessory(1, chaos);
-        equipAccessory(2, trans);
-
-        if (typeof Game.recalcStats === "function") {
-            Game.recalcStats();
-        }
-        if (typeof Game.updateUI === "function") {
-            Game.updateUI();
-        }
-        if (typeof Game.log === "function") {
-            Game.log("🌟 已自動套用最強開局套裝：虛空破滅劍 + 末世之鎧 + 魔神之壁 + 命運之輪 + 混沌魔方 + 超越魔方");
-        }
-    }
-
-    function install() {
-        if (!window.Game) return;
-
-        var oldSelect = Game.selectClass;
-        Game.applyGodStart = applyGodStart;
-
-        // 接管職業選擇：不改你原本的邏輯，只是選完職業後再幫你穿神裝
-        Game.selectClass = function (classType) {
-            if (typeof oldSelect === "function") {
-                oldSelect.call(Game, classType);
-            }
-            applyGodStart();
+        const inferno = CONFIG.infernoItems || [];
+        const clone = id => {
+            const tpl = inferno.find(x => x.id === id);
+            return tpl ? { ...tpl } : null;
         };
+
+        // 🪄 給主裝備
+        function equip(slot, item) {
+            if (!item) return;
+            if (Player.equipment[slot]) Game.addItemToInventory(Player.equipment[slot], false);
+            Player.equipment[slot] = item;
+            try { Player.history.items.add(item.name); } catch (e) {}
+        }
+
+        // 💍 給飾品
+        function equipAcc(i, item) {
+            if (!item) return;
+            if (Player.equipment.accessories[i]) {
+                Game.addItemToInventory(Player.equipment.accessories[i], false);
+            }
+            Player.equipment.accessories[i] = item;
+            try { Player.history.items.add(item.name); } catch (e) {}
+        }
+
+        // 🎁 六件最強套裝
+        equip("weapon", clone("w_void_breaker"));
+        equip("armor",  clone("a_apocalypse"));
+        equip("shield", clone("s_demon_wall"));
+        equipAcc(0, clone("acc_wheel"));
+        equipAcc(1, clone("acc_chaos"));
+        equipAcc(2, clone("acc_transcendence"));
+
+        // 🔄 更新畫面 & 屬性
+        Game.recalcStats?.();
+        Game.updateUI?.();
+        Game.log?.("🌟 已自動套用最強開局套裝（GodStart Mod）");
     }
 
-    if (document.readyState === "complete" || document.readyState === "interactive") {
-        install();
-    } else {
-        window.addEventListener("DOMContentLoaded", install);
+    /** 等待 Game 載入後，再接管 selectClass() */
+    function installWhenReady() {
+        log("等待 Game 模組載入中…");
+
+        const timer = setInterval(() => {
+            if (typeof Game === "undefined") return; // 尚未載入
+
+            clearInterval(timer);
+
+            // 保留原本的職業邏輯
+            const oldSelect = Game.selectClass;
+
+            // 注入 applyGodStart()
+            Game.applyGodStart = applyGodStart;
+
+            Game.selectClass = function (classType) {
+                oldSelect?.call(Game, classType);
+                applyGodStart(); // 🪄 選完職業後自動套神裝
+            };
+
+            console.log("🔥 GodStart 模組已安裝完成（開局自動穿最強套裝）");
+        }, 200);
     }
+
+    // 🚀 啟動補丁
+    installWhenReady();
+
 })();
